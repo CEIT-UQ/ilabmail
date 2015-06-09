@@ -1,0 +1,18 @@
+// this is a placeholder file and needs to be replaced with a generated Client ID
+
+/**
+
+	You can generate a key by making a new 	Project with the 
+	Google Developers Console.
+
+	From there navigate to 'APIs & auth' > Credentials > 
+	'Create new Client ID' > Download JSON
+
+	Name the JSON 'newKey.json' to replace this file.
+
+	Upon first accessing the email account you will be asked 
+	to give this app/project permission to access the email
+	account's mail.
+
+
+*/

@@ -1,0 +1,79 @@
+# Python 2.7
+v = "v0.03"
+# push_to_mongo.py
+# 
+# New in this version: Checks db to ensure email hasn't already been added.
+#
+# Subscribes to the MQTT channel provided by the global 'topic' on ceit's Winter server
+# variable and add's all valid json objects to the local mongodb.
+
+# Bugs/Issues:
+# Will crash if a message isn't json
+#
+
+import paho.mqtt.client as mqtt
+import paho.mqtt.publish as publish
+import pymongo
+import sys, json
+from pymongo import MongoClient
+
+# Globals
+MQTTserver = "winter.ceit.uq.edu.au"
+topic = "ilab/mail"
+
+mongoServer = "localhost"
+mPort = 27017
+
+def on_connect(paho, obj, rc):
+    print("rc: "+str(rc))
+    client.subscribe(topic, 0)
+
+def on_message(paho, obj, msg):
+    experiment_data = json.loads(msg.payload) # exp_data is a python object
+    print experiment_data
+    process_message(experiment_data)
+
+def process_message(experiment_data):
+    """
+    Checks to see if this particular experiment has already been added using it's uid
+    """
+    cursor = collection.find({"uid":experiment_data["uid"]})
+    msg = ''
+    if cursor.count() == 0: # if there were no results add the email
+        email_id = collection.insert(experiment_data)
+        msg = "Experiment with UID: '" +  experiment_data["uid"] + "' was added to the Database NEW"
+    else:
+        msg = "Experiment with UID: '" + experiment_data["uid"] +  "' is already in the Database OLD"
+    print msg
+    publish.single('ilab/status', str(msg), hostname=MQTTserver, keepalive=10)
+
+def on_publish(paho, obj, mid):
+    print("mid: "+str(mid))
+
+def on_subscribe(paho, obj, mid, granted_qos):
+    print("Subscribed: "+str(mid)+" "+str(granted_qos))
+
+def on_log(paho, obj, level, string):
+    print string
+
+if __name__ == '__main__':
+    # Make a mongoDB client and connect to the server.
+    mclient = MongoClient(mongoServer, mPort)
+    db = mclient.ilabmail
+    collection = db.raw
+
+    # Set up the mqtt client
+    client = mqtt.Client()
+    client.on_message = on_message
+    client.on_connect = on_connect
+    client.on_publish = on_publish
+    client.on_subscribe = on_subscribe
+
+    client.connect(MQTTserver) # Connect to the server
+
+    client.loop_forever()
+
+    client.unsubscribe(topic)
+    client.disconnect()
+
+sys.exit(0)

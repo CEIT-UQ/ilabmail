@@ -1,0 +1,175 @@
+#!/usr/bin/python
+
+# v2 now includes crash dump
+# v3 now includes generation of uid
+
+import httplib2, base64, sys, json, re, time, traceback
+import paho.mqtt.client as mqtt
+
+from apiclient.discovery import build
+from oauth2client.client import flow_from_clientsecrets
+from oauth2client.file import Storage
+from oauth2client.tools import run
+
+# MQTT Server
+server = "winter.ceit.uq.edu.au"
+
+# Remove UNREAD label object
+remove_unread = {"removeLabelIds": ['UNREAD']}
+
+def Authenticate_Gmail_Connection():
+  # Path to the client_secret.json file downloaded from the Developer Console
+  CLIENT_SECRET_FILE = 'keys/newKey.json'
+
+  # Check https://developers.google.com/gmail/api/auth/scopes for all available scopes
+  OAUTH_SCOPE = 'https://www.googleapis.com/auth/gmail.modify'
+
+  # Location of the credentials storage file
+  STORAGE = Storage('gmail.storage')
+
+  # Start the OAuth flow to retrieve credentials
+  flow = flow_from_clientsecrets(CLIENT_SECRET_FILE, scope=OAUTH_SCOPE)
+  http = httplib2.Http()
+
+  # Try to retrieve credentials from storage or run the flow to generate them
+  credentials = STORAGE.get()
+  if credentials is None or credentials.invalid:
+    credentials = run(flow, STORAGE, http=http)
+
+  # Authorize the httplib2.Http object with our credentials
+  http = credentials.authorize(http)
+
+  # Build the Gmail service from discovery
+  gmail_service = build('gmail', 'v1', http=http)
+  return gmail_service
+
+
+## This is the main function
+def main():
+  # Connect to the MQTT server
+  client = mqtt.Client()
+  client.connect(server)
+
+  gmail_service = Authenticate_Gmail_Connection()
+
+  # Retrieve a list of all unread mail
+  messages = ""
+  try:
+    messages = gmail_service.users().messages().list(userId='me', q="is:unread").execute()['messages']
+  except:
+    print "There are no unread messages"
+    client.publish("ilab/status", "There are no unread messages")
+
+  for message in messages:
+    # Retrieve the full contents of the email
+    mail = gmail_service.users().messages().get(userId='me', id=message['id'], format='full').execute()
+
+    # Mark the email as read. A Custom label could also be used here, for example "stored"
+    gmail_service.users().messages().modify(userId='me', id=message['id'], body=remove_unread).execute()
+    
+    print "THIS IS THE EMAIL WE PULLED:\n"
+
+    # Pull values from the email for use later
+    for header in mail['payload']['headers']:
+      if header['name'] == "Subject":
+        subject = header['value']
+      elif header['name'] == "Date":
+        date = header['value']
+    
+    # print subject # This line caused a crash when we tried to print a backtick?
+
+    # Ensure that the email is of text/plain format
+    if mail['payload']['mimeType'] != "text/plain":
+      continue
+
+    # Check Subject line for status of experiment
+    if not "Completed" in subject and not "Failed" in subject:
+      continue
+
+    msg = base64.standard_b64decode(mail['payload']['body']['data'])
+    
+    message_dict = {} # Dict to make into json
+
+    # Capture the Lab Server from the subject of the email
+    matchObj = re.match( r'^\[([A-Za-z0-9]+)', subject, re.M) # Could also use r'^\[(.+(?= ))' as the regex
+    if matchObj:
+      message_dict["LabServer"] = matchObj.group(0)[1:] # use [1:] to remove the initial '['
+    
+    # Capture the time the message was recieved
+    print date
+    timeZone = ' +1000'
+    if date:
+        date_parts = date.split(' ')
+        message_dict["Date"] = ' '.join(date_parts[1:4])
+        message_dict["Time"] = ' '.join(date_parts[4:5])
+        message_dict["Time"] = message_dict["Time"] + timeZone
+
+    # Open up the body of the message, and strip all the CR from the message.
+    msg = msg.replace('\r\n', '\n')
+    lines = msg.split('\n')
+
+    # Process each line in the body. If it has two components separated by a : then place
+    # it in a dictionary with the LHS as the key and the RHS as the value.  Strip leading white space
+    # from the RHS string (since we split about the ':', spaces remained on the RHS
+    for line in lines:
+        if line:
+            line_args = line.split(':')
+            if line_args[1]:
+                message_dict[line_args[0]] = line_args[1].lstrip()
+
+    message_dict = fixUp(message_dict, date)
+  
+    result = json.dumps(message_dict)
+
+    print "Sending: ", result
+    client.publish("ilab/mail", result)
+    client.publish("ilab/status", "Just published Experiment Id:"+message_dict["Experiment Id"]+" to iLab/mail")
+    client.loop()
+ 
+def fixUp(message_dict, date):
+  # old emails use SetupId field rather than Setup
+  if "SetupId" in message_dict.keys():
+    message_dict["Setup"] = message_dict["SetupId"]
+    del message_dict["SetupId"]
+
+  # Someone's miss labelled the Service Broker somewhere. 
+  # This is a frustrating fix. -.-
+  if message_dict["ServiceBroker"] == "MachinesLab":
+    message_dict["ServiceBroker"] = "UQ MachinesLab"
+
+  # Apparently one of the servers sends a slightly different date format.
+  # This also, only seems to happen on a failed experiment...
+  # If this happens then the date format was actually: "23 May 2015 24:60:60 +1000"
+  # which is the same, but without the comma and day-name
+  if message_dict["Time"] == "+1000 +1000":
+    message_dict["Date"] = ' '.join(date.split(' ')[0:3])
+    message_dict["Time"] = ' '.join(date.split(' ')[3:4]) + " +1000"
+
+  # create the UID for this datapoint.
+  # A UId is necessary as Experiment Id's are no longer unique.
+  UID = message_dict["Setup"][:3] + \
+        message_dict["LabServer"][:3] + \
+        message_dict["ServiceBroker"][:3].strip() + \
+        message_dict["ServiceBroker"][-3:] + \
+        message_dict["Usergroup"][:3] + \
+        message_dict["Experiment Id"]
+
+  print 'UID for email is: ', UID
+
+  message_dict['uid'] = UID
+
+  # return the repaired message_dict  
+  return message_dict
+
+
+## Run and report if we crash
+if __name__ == "__main__":
+  try:
+    while(True):
+      main()
+      time.sleep(60)
+  except:
+    fd = open("/home/s4262468/ilabmail/services/api_read_publish.log", 'w')
+    traceback.print_exc(file=fd)
+    traceback.print_exc(file=sys.stdout)
+ 
