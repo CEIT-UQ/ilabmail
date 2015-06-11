@@ -1,3 +1,4 @@
+// csv format for help:
 // Setup,Time,Date,ServiceBroker,LabServer,StatusCode
 // "RadioactivityVsTime","20:04:27 +1000","Thu, 12 Mar 2015","Carinthia","Radioactivity","Completed"
 
@@ -13,15 +14,9 @@ var parseDate = d3.time.format('%e %b %Y').parse
 
 
 // Convert strDate to a Date object
-setups = []
 data.forEach(function (d) {
 	d.date = new Date(d.Date)
 	d.time = parseTime(d.Time)
-
-	// While we're at it lets find all the possible setup names
-	if (setups.indexOf(d.Setup) == -1) { // It's not in the array
-		setups.push(d.Setup)
-	}
 })
 
 var ndx = crossfilter(data) // Make the Crossfilter
@@ -50,6 +45,7 @@ dateDim = ndx.dimension(function (d) {
 minDate = dateDim.bottom(1)[0].date
 maxDate = dateDim.top(1)[0].date
 
+// All the experiments that failed in a group
 failureBarGroup = dateDim.group().reduceSum(function (d) {
 	if (d.StatusCode == "Failed") {
 		return 1
@@ -57,6 +53,7 @@ failureBarGroup = dateDim.group().reduceSum(function (d) {
 	return 0
 })
 
+// All the experiments that passed in a group
 successBarGroup = dateDim.group().reduceSum(function (d) {
 	if (d.StatusCode == "Completed") {
 		return 1
@@ -74,12 +71,15 @@ failureDim = ndx.dimension(function (d) {
 	return d.StatusCode
 })
 
+// Order by hour of day
 timeDim = ndx.dimension(function (d) {
 	return d.time.getHours()
 })
 
+// clump this dist by hour
 hourGroup = timeDim.group().reduceSum(function (d) {})
 
+// Order by setup
 setupDim = ndx.dimension(function (d) {
 	return d.Setup
 })
@@ -133,9 +133,6 @@ zoomChart
 dc.dataCount('.dc-data-count')
     .dimension(ndx)
     .group(all)
-    // (optional) html, for setting different html for some records and all records.
-    // .html replaces everything in the anchor with the html given using the following function.
-    // %filter-count and %total-count are replaced with the values obtained.
     .html({
         some:'<strong>%filter-count</strong> selected out of <strong>%total-count</strong> records' +
             ' | <a href=\'javascript:dc.filterAll(); dc.renderAll();\'\'>Reset All</a>',
@@ -221,8 +218,5 @@ mostRecent
 
 // Render all the graphs!
 dc.renderAll();
-
-// d3.selectAll("#setup-split").select("svg").attr("transform", function(d) { return "rotate(90)"});
-
 
 }) // close the csv callback
