@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Uses the Google Mail API to check the inbox of ilabsanalysis@gmail.com for new ilab emails.
-# Extracts the necessary information from the email and then posts it to the /iLab/mail topic on winter's MQTT server
+# Subscribes to the ilab/mail channel on the localhost's MQTT broker and then pushes all JSON Objects
+# that is recieves through that channel into the ilabmail/raw collection of the localhost's mongodb instance
+
 
 DAEMON="/usr/local/bin/python2.7"
 DAEMONOPTS="push_to_mongo.service"

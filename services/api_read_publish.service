@@ -1,9 +1,17 @@
-#!/usr/bin/python
+#!/usr/bin/python 2.7
 
-# v2 now includes crash dump
-# v3 now includes generation of uid
+# api_read_publish.py
+#
+# Connects to an email account and parses all unread emails for 
+# operational data in a colon separated format. 
+# Does some basic fixing if the resulting object fits a certain
+# description and then publishes it to ilab/mail
 
-import httplib2, base64, sys, json, re, time, traceback
+# Bugs/Issues:
+# None that are currently known
+#
+
+import httplib2, base64, sys, json, re, time, traceback, os
 import paho.mqtt.client as mqtt
 
 from apiclient.discovery import build
@@ -75,8 +83,6 @@ def main():
         subject = header['value']
       elif header['name'] == "Date":
         date = header['value']
-    
-    # print subject # This line caused a crash when we tried to print a backtick?
 
     # Ensure that the email is of text/plain format
     if mail['payload']['mimeType'] != "text/plain":
@@ -132,8 +138,7 @@ def fixUp(message_dict, date):
     message_dict["Setup"] = message_dict["SetupId"]
     del message_dict["SetupId"]
 
-  # Someone's miss labelled the Service Broker somewhere. 
-  # This is a frustrating fix. -.-
+  # Someone's mislabelled the Service Broker somewhere. 
   if message_dict["ServiceBroker"] == "MachinesLab":
     message_dict["ServiceBroker"] = "UQ MachinesLab"
 
@@ -169,7 +174,7 @@ if __name__ == "__main__":
       main()
       time.sleep(60)
   except:
-    fd = open("/home/s4262468/ilabmail/services/api_read_publish.log", 'w')
+    fd = open(os.path.dirname(os.path.abspath(__file__))+"/api_read_publish.log", 'w')
     traceback.print_exc(file=fd)
     traceback.print_exc(file=sys.stdout)
  

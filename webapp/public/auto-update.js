@@ -8,6 +8,7 @@
 
 var socket = io()
 
+// Create the socket
 socket.on('new-data', function (d) {
 	console.log('Refresh the page to use up to date data')
 	socket.emit('ans', "received")

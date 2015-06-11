@@ -1,5 +1,5 @@
-# Python 2.7
-v = "v0.03"
+#!/usr/bin/python 2.7
+
 # push_to_mongo.py
 # 
 # New in this version: Checks db to ensure email hasn't already been added.

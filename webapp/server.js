@@ -21,9 +21,6 @@ var express = require('express')
 	mqtt = require('mqtt')
 	spawn = require('child_process').spawn
 	
-	// Dev auto-reload
-	reload = require('reload')
-
 	// Auto-update
 	io = require('socket.io')(server)
 	
