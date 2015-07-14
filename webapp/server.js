@@ -1,6 +1,6 @@
 /*////////////////////////////////////////////
 
-	Webapp server. 
+	Webapp server.
 	Uses:
 		- Serves Dashboard Content
 		- Updates data.csv on mqtt
@@ -9,7 +9,7 @@
 
 */////////////////////////////////////////////
 
-	// General server 
+	// General server
 var express = require('express')
 	app = express()
 	server = require('http').createServer(app)
@@ -20,19 +20,18 @@ var express = require('express')
 	_ = require('underscore')
 	mqtt = require('mqtt')
 	spawn = require('child_process').spawn
-	
+
 	// Auto-update
 	io = require('socket.io')(server)
-	
+
 	// Twitter feed output
 	Twit = require('twit')
-
 
 var T = new Twit(require('twitter_keys'))
 
 // Start the server
 var port = 55672;
-server.listen(port, function() { 
+server.listen(port, function() {
 	console.log('Listening on: ' + port)
 });
 
@@ -44,9 +43,6 @@ app.use('/regen', function(req,res,next){
 })
 
 app.use('/', express.static(__dirname + '/public'));
-
-//reload code here 
-reload(server, app)
 
 /* //////////////////////////////////////////////////////
 
@@ -69,7 +65,7 @@ function tellClientUpdate() {
 /* //////////////////////////////////////////////////////
 
 		The data.csv update portion of the server
-*/ 
+*/
 var last = process.hrtime() // get the first time
 
 mqttClient = mqtt.connect('mqtt://winter.ceit.uq.edu.au')
@@ -103,7 +99,7 @@ function forceRegen() {
 	var mongoDumpToCSV = spawn('sh', [ 'mongoDumpToCSV.sh' ], {
 		cwd: process.env.PWD,
 		env:_.extend(process.env, { PATH: process.env.PATH + ':/usr/local/bin' })
-	});		
+	});
 
 	// Get all the output
 	mongoDumpToCSV.stdout.on('data', function (data) {
@@ -143,7 +139,7 @@ process.stdin.on('readable', function () {
 	var chunk = process.stdin.read()
 	if (chunk !== null) {
 		process.stdout.write('command: '+chunk)
-		// 'rs' to reload the 
+		// 'rs' to reload the
 		if (chunk == "rs\n") {
 			process.stdout.write('Regenerating public/data.csv\n')
 			forceRegen()
@@ -152,7 +148,7 @@ process.stdin.on('readable', function () {
 		} else if (chunk.toString().charAt(0) == "@") {
 			process.stdout.write("We're sending a tweet now\n")
 			tweet(chunk.toString().substring(1))
-		
+
 		// Check if clients are alive
 		} else if (chunk == "cu\n") {
 			console.log("Sending the update message to all connected clients")
